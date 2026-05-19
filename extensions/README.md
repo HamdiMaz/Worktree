@@ -2,10 +2,27 @@
 
 This directory contains the Pi extension entry point for `@mazli/pi-worktree`.
 
-## Current scaffold
+## Runtime behavior
 
-- `index.ts` exports the package's single Pi extension factory.
-- The npm package manifest loads only `./extensions/index.ts` via `pi.extensions`.
-- No tools, commands, skills, prompts, or themes are registered yet.
+The extension registers `/worktree <name>`.
 
-Future worktree behavior should be added through this entry point or imported helper modules.
+The command:
+
+- uses `<name>` as the Git branch name
+- uses a sanitized `<name>` as the directory name
+- creates worktrees under `<repoRoot>/.worktrees/`
+- creates `.worktrees` when missing
+- appends `.worktrees` to an existing `.gitignore` when missing
+- switches Pi into a fresh worktree-bound session
+- adds hidden worktree context without sending a user message
+
+## Files
+
+```txt
+index.ts              Extension entry point
+worktree-command.ts   Command orchestration
+paths.ts              Path and directory helpers
+gitignore.ts          .gitignore helper
+git.ts                Git command helpers
+session.ts            Pi session switching helper
+```

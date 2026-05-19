@@ -4,7 +4,15 @@ A Pi package extension for simplifying Git worktree workflows.
 
 ## Status
 
-This repository is scaffolded as a Pi extension package. The extension entry point is in `extensions/index.ts`; no runtime tools or commands are registered yet.
+This package provides a `/worktree <name>` Pi slash command.
+
+The command creates or reuses a Git worktree at:
+
+```txt
+<repoRoot>/.worktrees/<sanitized-name>
+```
+
+The raw `<name>` is used as the Git branch name. The filesystem directory name is sanitized, so `Feature/Auth` becomes `Feature-Auth`.
 
 ## Install for local development
 
@@ -30,6 +38,24 @@ Pi loads the package through the manifest in `package.json`:
   }
 }
 ```
+
+## Usage
+
+Inside a Git repository, run:
+
+```txt
+/worktree Feature/Auth
+```
+
+The command will:
+
+- create `<repoRoot>/.worktrees` when missing
+- append `.worktrees` to `.gitignore` when `.gitignore` exists and does not already include it
+- create or reuse `<repoRoot>/.worktrees/Feature-Auth`
+- create or use branch `Feature/Auth`
+- switch Pi into a fresh session rooted at the worktree
+
+The command does not trigger an agent response. Hidden context tells the agent which worktree and branch it is in on the next user message.
 
 ## Project layout
 
