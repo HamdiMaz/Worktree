@@ -16,7 +16,7 @@ The command:
 - switches Pi into a fresh worktree-bound session
 - adds hidden worktree context without sending a user message
 
-The current Pi session must be persisted before the switch can happen. If Pi reports that it is not persisted yet, send a message first, then run `/worktree <name>` again.
+The command uses hybrid session creation. If the current Pi session has a persisted file, the worktree session is forked from it for lineage. If the current session is brand new and has no file yet, the extension creates a fresh persisted worktree session directly without sending or cancelling an agent message.
 
 ## Files
 
