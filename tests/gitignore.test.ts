@@ -49,4 +49,16 @@ describe("gitignore helper", () => {
 			await rm(repoRoot, { recursive: true, force: true });
 		}
 	});
+
+	it("propagates unexpected .gitignore access errors", async () => {
+		const tempDir = await mkdtemp(join(tmpdir(), "pi-worktree-gitignore-"));
+		try {
+			const repoRoot = join(tempDir, "not-a-directory");
+			await writeFile(repoRoot, "not a directory", "utf8");
+
+			await assert.rejects(ensureGitignoreIncludesWorktrees(repoRoot), { code: "ENOTDIR" });
+		} finally {
+			await rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });

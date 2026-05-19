@@ -6,8 +6,11 @@ async function fileExists(path: string): Promise<boolean> {
 	try {
 		await access(path, constants.F_OK);
 		return true;
-	} catch {
-		return false;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return false;
+		}
+		throw error;
 	}
 }
 
