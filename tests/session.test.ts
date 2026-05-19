@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { SessionManager, type ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { buildWorktreeContextMessage, switchToFreshWorktreeSession, WORKTREE_CUSTOM_TYPE } from "../extensions/session.ts";
+import {
+	buildSessionPersistenceSentinelMessage,
+	buildWorktreeContextMessage,
+	switchToFreshWorktreeSession,
+	WORKTREE_CUSTOM_TYPE,
+} from "../extensions/session.ts";
 
 const tempRoots: string[] = [];
 
@@ -18,6 +23,26 @@ function makeTempRoot(): string {
 	const root = mkdtempSync(join(tmpdir(), "pi-worktree-session-test-"));
 	tempRoots.push(root);
 	return root;
+}
+
+interface TestSessionEntry {
+	type: string;
+	parentId?: string | null;
+	customType?: string;
+	message?: {
+		role?: string;
+		provider?: string;
+		model?: string;
+		stopReason?: string;
+		content?: unknown[];
+	};
+}
+
+function readSessionEntries(sessionFile: string): TestSessionEntry[] {
+	return readFileSync(sessionFile, "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as TestSessionEntry);
 }
 
 function appendSeedConversation(sessionManager: SessionManager): void {
@@ -43,12 +68,18 @@ function appendSeedConversation(sessionManager: SessionManager): void {
 
 class FakeForkedSessionManager {
 	readonly customMessages: Array<{ customType: string; content: string; display: boolean; details?: unknown }> = [];
+	readonly messages: Array<Parameters<SessionManager["appendMessage"]>[0]> = [];
 	resetLeafCalled = false;
 
 	constructor(private readonly sessionFile: string | undefined) {}
 
 	resetLeaf(): void {
 		this.resetLeafCalled = true;
+	}
+
+	appendMessage(message: Parameters<SessionManager["appendMessage"]>[0]): string {
+		this.messages.push(message);
+		return "message-entry-id";
 	}
 
 	appendCustomMessageEntry(customType: string, content: string, display: boolean, details?: unknown): string {
@@ -111,6 +142,26 @@ describe("session helper", () => {
 		);
 	});
 
+	it("builds an aborted assistant sentinel for forcing SessionManager persistence", () => {
+		assert.deepEqual(buildSessionPersistenceSentinelMessage(123), {
+			role: "assistant",
+			content: [],
+			api: "synthetic",
+			provider: "pi-worktree",
+			model: "session-persistence-sentinel",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "aborted",
+			timestamp: 123,
+		});
+	});
+
 	it("forks a persisted seed session into a fresh active worktree context without triggering the agent", async () => {
 		const root = makeTempRoot();
 		const sourceDir = join(root, "source");
@@ -164,13 +215,49 @@ describe("session helper", () => {
 		assert.deepEqual(notifications, []);
 	});
 
-	it("fails safely when the current session is not persisted", async () => {
-		const { ctx } = fakeCommandContext(undefined);
+	it("creates a directly persisted worktree session when the current Pi session has no file yet", async () => {
+		const root = makeTempRoot();
+		const worktreeDir = join(root, "worktree");
+		const sessionDir = join(root, "sessions");
+		mkdirSync(worktreeDir, { recursive: true });
+		const { ctx, notifications, switched, forbiddenCalls } = fakeCommandContext(undefined);
 
-		await assert.rejects(
-			switchToFreshWorktreeSession(ctx, "feature/foo", "/repo/.worktrees/feature-foo"),
-			/current Pi session is not persisted/,
-		);
+		await switchToFreshWorktreeSession(ctx, "feature/foo", worktreeDir, {
+			createSessionForWorktree: (targetCwd) => SessionManager.create(targetCwd, sessionDir),
+		});
+
+		assert.equal(switched.length, 1);
+		const switchedSessionFile = switched[0];
+		assert.ok(switchedSessionFile);
+		assert.equal(existsSync(switchedSessionFile), true);
+
+		const entries = readSessionEntries(switchedSessionFile);
+		assert.equal(entries[0]?.type, "session");
+		assert.equal(entries[1]?.type, "message");
+		assert.equal(entries[1]?.parentId, null);
+		assert.equal(entries[1]?.message?.role, "assistant");
+		assert.equal(entries[1]?.message?.provider, "pi-worktree");
+		assert.equal(entries[1]?.message?.model, "session-persistence-sentinel");
+		assert.equal(entries[1]?.message?.stopReason, "aborted");
+		assert.deepEqual(entries[1]?.message?.content, []);
+		assert.equal(entries[2]?.type, "custom_message");
+		assert.equal(entries[2]?.parentId, null);
+		assert.equal(entries[2]?.customType, WORKTREE_CUSTOM_TYPE);
+
+		const reopened = SessionManager.open(switchedSessionFile, sessionDir);
+		assert.equal(reopened.getCwd(), worktreeDir);
+		assert.deepEqual(reopened.buildSessionContext().messages, [
+			{
+				role: "custom",
+				customType: WORKTREE_CUSTOM_TYPE,
+				content: `You are in git worktree \`${worktreeDir}\` on branch \`feature/foo\`. Please keep all changes in this worktree.`,
+				display: false,
+				details: { branch: "feature/foo", worktreeDir },
+				timestamp: reopened.buildSessionContext().messages[0]?.timestamp,
+			},
+		]);
+		assert.deepEqual(notifications, [{ message: `Switched to worktree: ${worktreeDir}`, type: "info" }]);
+		assert.deepEqual(forbiddenCalls, []);
 	});
 
 	it("fails safely when the forked session manager does not return a session file", async () => {

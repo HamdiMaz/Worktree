@@ -3,15 +3,46 @@ import { SessionManager, type ExtensionCommandContext } from "@earendil-works/pi
 
 export const WORKTREE_CUSTOM_TYPE = "pi-worktree";
 
+const SENTINEL_PROVIDER = "pi-worktree";
+const SENTINEL_MODEL = "session-persistence-sentinel";
+
+type SessionMessage = Parameters<SessionManager["appendMessage"]>[0];
+
 interface WorktreeSessionManager {
 	resetLeaf(): void;
+	appendMessage(message: SessionMessage): string;
 	appendCustomMessageEntry(customType: string, content: string, display: boolean, details?: unknown): string;
 	getSessionFile(): string | undefined;
 }
 
 export interface SwitchWorktreeSessionOptions {
 	forkSessionFromSeed?: (sourceSessionFile: string, worktreeDir: string) => WorktreeSessionManager;
+	createSessionForWorktree?: (worktreeDir: string) => WorktreeSessionManager;
 	sessionFileExists?: (path: string) => boolean;
+}
+
+function zeroUsage(): SessionMessage extends { usage: infer T } ? T : never {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	} as SessionMessage extends { usage: infer T } ? T : never;
+}
+
+export function buildSessionPersistenceSentinelMessage(timestamp = Date.now()): SessionMessage {
+	return {
+		role: "assistant",
+		content: [],
+		api: "synthetic",
+		provider: SENTINEL_PROVIDER,
+		model: SENTINEL_MODEL,
+		usage: zeroUsage(),
+		stopReason: "aborted",
+		timestamp,
+	};
 }
 
 export function buildWorktreeContextMessage(branch: string, worktreeDir: string): string {
@@ -26,13 +57,18 @@ export async function switchToFreshWorktreeSession(
 ): Promise<void> {
 	const sessionFileExists = options.sessionFileExists ?? existsSync;
 	const forkSessionFromSeed = options.forkSessionFromSeed ?? ((sourceSessionFile: string, cwd: string) => SessionManager.forkFrom(sourceSessionFile, cwd));
+	const createSessionForWorktree = options.createSessionForWorktree ?? ((cwd: string) => SessionManager.create(cwd));
 	const seedSessionFile = ctx.sessionManager.getSessionFile();
+	const hasPersistedSeedSession = seedSessionFile !== undefined && sessionFileExists(seedSessionFile);
 
-	if (!seedSessionFile || !sessionFileExists(seedSessionFile)) {
-		throw new Error("Cannot create a worktree session because the current Pi session is not persisted yet. Send a message first, then run /worktree again.");
+	const sessionManager = hasPersistedSeedSession
+		? forkSessionFromSeed(seedSessionFile, worktreeDir)
+		: createSessionForWorktree(worktreeDir);
+
+	if (!hasPersistedSeedSession) {
+		sessionManager.appendMessage(buildSessionPersistenceSentinelMessage());
 	}
 
-	const sessionManager = forkSessionFromSeed(seedSessionFile, worktreeDir);
 	sessionManager.resetLeaf();
 
 	const content = buildWorktreeContextMessage(branch, worktreeDir);
