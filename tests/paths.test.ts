@@ -12,6 +12,11 @@ describe("path helpers", () => {
 		assert.equal(sanitizeWorktreeName("release_1.0-fix"), "release_1.0-fix");
 	});
 
+	it("maps empty and whitespace-only names to a safe filesystem segment", () => {
+		assert.equal(sanitizeWorktreeName(""), "-");
+		assert.equal(sanitizeWorktreeName("   \t\n"), "-");
+	});
+
 	it("does not return directory traversal names", () => {
 		assert.equal(sanitizeWorktreeName("."), "-");
 		assert.equal(sanitizeWorktreeName(".."), "--");

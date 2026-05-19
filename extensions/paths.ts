@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 export function sanitizeWorktreeName(name: string): string {
 	const sanitized = name.trim().replace(/[^a-zA-Z0-9._-]/g, "-");
 
-	if (sanitized === "." || sanitized === "..") {
-		return sanitized.replace(/\./g, "-");
+	if (sanitized === "" || sanitized === "." || sanitized === "..") {
+		return sanitized.replace(/\./g, "-") || "-";
 	}
 
 	return sanitized;
