@@ -46,6 +46,13 @@ export async function branchExists(pi: PiExec, repoRoot: string, branch: string)
 	return result.ok && result.value;
 }
 
+export async function validateBranchName(pi: PiExec, repoRoot: string, branch: string): Promise<Result<void>> {
+	const result = await pi.exec("git", ["check-ref-format", "--branch", branch], { cwd: repoRoot });
+	if (result.code === 0) return { ok: true, value: undefined };
+
+	return { ok: false, error: commandError(result, "Invalid branch name") };
+}
+
 export async function isGitWorktree(pi: PiExec, worktreeDir: string): Promise<boolean> {
 	const result = await pi.exec("git", ["rev-parse", "--show-toplevel"], { cwd: worktreeDir });
 	return result.code === 0 && resolve(result.stdout.trim()) === resolve(worktreeDir);

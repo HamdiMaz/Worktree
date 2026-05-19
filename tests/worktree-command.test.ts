@@ -82,6 +82,7 @@ describe("worktree command orchestration", () => {
 	it("creates .worktrees, updates gitignore, creates worktree, and switches sessions", async () => {
 		const { pi, calls } = fakePi((call) => {
 			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
 			if (call.args[0] === "show-ref") return execResult({ code: 1 });
 			return execResult({ code: 0 });
 		});
@@ -107,6 +108,7 @@ describe("worktree command orchestration", () => {
 		assert.deepEqual(gitignoreRoots, ["/repo"]);
 		assert.deepEqual(calls.map((call) => call.args), [
 			["rev-parse", "--show-toplevel"],
+			["check-ref-format", "--branch", "Feature/Auth"],
 			["show-ref", "--verify", "--quiet", "refs/heads/Feature/Auth"],
 			["worktree", "add", "-b", "Feature/Auth", "/repo/.worktrees/Feature-Auth"],
 		]);
@@ -114,9 +116,40 @@ describe("worktree command orchestration", () => {
 		assert.deepEqual(notifications, []);
 	});
 
+	it("surfaces branch validation errors before filesystem side effects", async () => {
+		const { pi, calls } = fakePi((call) => {
+			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 128, stderr: "fatal: 'bad branch' is not a valid branch name\n" });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
+		const { ctx, notifications } = fakeCtx();
+		const sideEffects: string[] = [];
+
+		await handleWorktreeCommand(pi, "bad branch", ctx, {
+			ensureDirectory: async () => {
+				sideEffects.push("ensureDirectory");
+			},
+			ensureGitignoreIncludesWorktrees: async () => {
+				sideEffects.push("ensureGitignoreIncludesWorktrees");
+			},
+			pathExists: () => {
+				sideEffects.push("pathExists");
+				return false;
+			},
+			switchToFreshWorktreeSession: async () => {
+				sideEffects.push("switchToFreshWorktreeSession");
+			},
+		});
+
+		assert.deepEqual(notifications, [{ message: "fatal: 'bad branch' is not a valid branch name", type: "error" }]);
+		assert.deepEqual(sideEffects, []);
+		assert.equal(calls.some((call) => call.args[0] === "worktree" && call.args[1] === "add"), false);
+	});
+
 	it("surfaces worktree creation errors", async () => {
 		const { pi } = fakePi((call) => {
 			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
 			if (call.args[0] === "show-ref") return execResult({ code: 1 });
 			return execResult({ code: 128, stderr: "fatal: invalid branch\n" });
 		});
@@ -135,6 +168,7 @@ describe("worktree command orchestration", () => {
 	it("surfaces session switch errors without triggering the agent", async () => {
 		const { pi } = fakePi((call) => {
 			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
 			if (call.args[0] === "show-ref") return execResult({ code: 0 });
 			return execResult({ code: 0 });
 		});

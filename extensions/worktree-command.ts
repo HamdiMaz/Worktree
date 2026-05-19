@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { createOrReuseWorktree, getRepoRoot } from "./git.ts";
+import { createOrReuseWorktree, getRepoRoot, validateBranchName } from "./git.ts";
 import { ensureGitignoreIncludesWorktrees } from "./gitignore.ts";
 import { ensureDirectory, getWorktreeDir, getWorktreesDir, sanitizeWorktreeName } from "./paths.ts";
 import { switchToFreshWorktreeSession } from "./session.ts";
@@ -45,6 +45,12 @@ export async function handleWorktreeCommand(
 	}
 
 	const repoRoot = rootResult.value;
+	const branchValidation = await validateBranchName(pi, repoRoot, branch);
+	if (!branchValidation.ok) {
+		ctx.ui.notify(branchValidation.error, "error");
+		return;
+	}
+
 	const safeName = sanitizeWorktreeName(branch);
 	const worktreesDir = getWorktreesDir(repoRoot);
 	const worktreeDir = getWorktreeDir(repoRoot, safeName);

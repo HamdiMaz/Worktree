@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { describe, it } from "node:test";
 import type { ExecOptions, ExecResult } from "@earendil-works/pi-coding-agent";
-import { branchExists, createOrReuseWorktree, getRepoRoot, isGitWorktree } from "../extensions/git.ts";
+import { branchExists, createOrReuseWorktree, getRepoRoot, isGitWorktree, validateBranchName } from "../extensions/git.ts";
 
 function result(overrides: Partial<ExecResult>): ExecResult {
 	return {
@@ -55,6 +55,26 @@ describe("git helpers", () => {
 		assert.equal(await branchExists(exists.pi, "/repo", "feature/foo"), true);
 		assert.equal(await branchExists(missing.pi, "/repo", "feature/foo"), false);
 		assert.deepEqual(exists.calls[0]?.args, ["show-ref", "--verify", "--quiet", "refs/heads/feature/foo"]);
+	});
+
+	it("validates a branch name with git check-ref-format", async () => {
+		const { pi, calls } = fakePiExec(() => result({ code: 0 }));
+
+		assert.deepEqual(await validateBranchName(pi, "/repo", "feature/foo"), { ok: true, value: undefined });
+		assert.deepEqual(calls[0], {
+			command: "git",
+			args: ["check-ref-format", "--branch", "feature/foo"],
+			options: { cwd: "/repo" },
+		});
+	});
+
+	it("returns git's branch validation error", async () => {
+		const { pi } = fakePiExec(() => result({ code: 128, stderr: "fatal: 'bad branch' is not a valid branch name\n" }));
+
+		assert.deepEqual(await validateBranchName(pi, "/repo", "bad branch"), {
+			ok: false,
+			error: "fatal: 'bad branch' is not a valid branch name",
+		});
 	});
 
 	it("detects a worktree root", async () => {
