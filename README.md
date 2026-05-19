@@ -55,6 +55,8 @@ The command will:
 - create or use branch `Feature/Auth`
 - switch Pi into a fresh session rooted at the worktree
 
+The command needs the current Pi session to be persisted before it can switch sessions. If Pi reports that the session is not persisted yet, send a message first, then run `/worktree <name>` again.
+
 The command does not trigger an agent response. Hidden context tells the agent which worktree and branch it is in on the next user message.
 
 ## Project layout

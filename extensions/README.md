@@ -16,6 +16,8 @@ The command:
 - switches Pi into a fresh worktree-bound session
 - adds hidden worktree context without sending a user message
 
+The current Pi session must be persisted before the switch can happen. If Pi reports that it is not persisted yet, send a message first, then run `/worktree <name>` again.
+
 ## Files
 
 ```txt
