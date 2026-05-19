@@ -13,7 +13,7 @@ describe("worktree extension registration", () => {
 				registeredTools.push(tool);
 			},
 			registerCommand(name: string, options: { description?: string }) {
-				registeredCommands.push({ name, description: options.description });
+				registeredCommands.push(options.description === undefined ? { name } : { name, description: options.description });
 			},
 			on(event: string) {
 				registeredEvents.push(event);

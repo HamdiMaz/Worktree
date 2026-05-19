@@ -22,7 +22,7 @@ function fakePiExec(handler: (call: ExecCall) => ExecResult | Promise<ExecResult
 		calls,
 		pi: {
 			async exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult> {
-				const call = { command, args, options };
+				const call: ExecCall = options === undefined ? { command, args } : { command, args, options };
 				calls.push(call);
 				return handler(call);
 			},

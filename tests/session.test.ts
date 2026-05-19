@@ -74,7 +74,7 @@ function fakeCommandContext(seedSessionFile: string | undefined) {
 		},
 		ui: {
 			notify(message: string, type?: "info" | "warning" | "error") {
-				notifications.push({ message, type });
+				notifications.push(type === undefined ? { message } : { message, type });
 			},
 		},
 		async switchSession(sessionPath: string, options?: { withSession?: (ctx: ExtensionCommandContext) => Promise<void> }) {
@@ -82,7 +82,7 @@ function fakeCommandContext(seedSessionFile: string | undefined) {
 			await options?.withSession?.({
 				ui: {
 					notify(message: string, type?: "info" | "warning" | "error") {
-						notifications.push({ message, type });
+						notifications.push(type === undefined ? { message } : { message, type });
 					},
 					setEditorText() {
 						forbiddenCalls.push("setEditorText");
