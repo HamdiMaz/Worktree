@@ -61,7 +61,7 @@ class FakeForkedSessionManager {
 	}
 }
 
-function fakeCommandContext(seedSessionFile: string | undefined) {
+function fakeCommandContext(seedSessionFile: string | undefined, contextOptions: { switchCancelled?: boolean } = {}) {
 	const notifications: Array<{ message: string; type?: "info" | "warning" | "error" }> = [];
 	const switched: string[] = [];
 	const forbiddenCalls: string[] = [];
@@ -79,6 +79,9 @@ function fakeCommandContext(seedSessionFile: string | undefined) {
 		},
 		async switchSession(sessionPath: string, options?: { withSession?: (ctx: ExtensionCommandContext) => Promise<void> }) {
 			switched.push(sessionPath);
+			if (contextOptions.switchCancelled === true) {
+				return { cancelled: true };
+			}
 			await options?.withSession?.({
 				ui: {
 					notify(message: string, type?: "info" | "warning" | "error") {
@@ -144,6 +147,21 @@ describe("session helper", () => {
 		]);
 		assert.deepEqual(notifications, [{ message: `Switched to worktree: ${worktreeDir}`, type: "info" }]);
 		assert.deepEqual(forbiddenCalls, []);
+	});
+
+	it("rejects when Pi cancels the worktree session switch", async () => {
+		const fakeForkedSession = new FakeForkedSessionManager("/sessions/worktree.jsonl");
+		const { ctx, notifications, switched } = fakeCommandContext("/sessions/current.jsonl", { switchCancelled: true });
+
+		await assert.rejects(
+			switchToFreshWorktreeSession(ctx, "feature/foo", "/repo/.worktrees/feature-foo", {
+				forkSessionFromSeed: () => fakeForkedSession,
+				sessionFileExists: (path) => path === "/sessions/current.jsonl" || path === "/sessions/worktree.jsonl",
+			}),
+			/cancelled/,
+		);
+		assert.deepEqual(switched, ["/sessions/worktree.jsonl"]);
+		assert.deepEqual(notifications, []);
 	});
 
 	it("fails safely when the current session is not persisted", async () => {

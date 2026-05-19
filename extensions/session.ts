@@ -47,9 +47,12 @@ export async function switchToFreshWorktreeSession(
 		throw new Error(`Pi did not persist the worktree session file: ${sessionFile}`);
 	}
 
-	await ctx.switchSession(sessionFile, {
+	const switchResult = await ctx.switchSession(sessionFile, {
 		withSession: async (nextCtx) => {
 			nextCtx.ui.notify(`Switched to worktree: ${worktreeDir}`, "info");
 		},
 	});
+	if (switchResult.cancelled) {
+		throw new Error("Switch to worktree session was cancelled.");
+	}
 }
