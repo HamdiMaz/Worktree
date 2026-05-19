@@ -51,19 +51,33 @@ export async function isGitWorktree(pi: PiExec, worktreeDir: string): Promise<bo
 	return result.code === 0 && resolve(result.stdout.trim()) === resolve(worktreeDir);
 }
 
-async function isRegisteredWorktree(pi: PiExec, repoRoot: string, worktreeDir: string): Promise<Result<boolean>> {
+async function getRegisteredWorktreeBranch(pi: PiExec, repoRoot: string, worktreeDir: string): Promise<Result<string | null | undefined>> {
 	const result = await pi.exec("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot });
 	if (result.code !== 0) {
 		return { ok: false, error: commandError(result, "Failed to list worktrees") };
 	}
 
 	const resolvedWorktreeDir = resolve(worktreeDir);
-	const registered = result.stdout
-		.split("\n")
-		.filter((line) => line.startsWith("worktree "))
-		.some((line) => resolve(line.slice("worktree ".length)) === resolvedWorktreeDir);
+	let matchingWorktree = false;
+	let branch: string | null = null;
 
-	return { ok: true, value: registered };
+	for (const line of result.stdout.split("\n")) {
+		if (line.startsWith("worktree ")) {
+			if (matchingWorktree) return { ok: true, value: branch };
+
+			matchingWorktree = resolve(line.slice("worktree ".length)) === resolvedWorktreeDir;
+			branch = null;
+			continue;
+		}
+
+		if (matchingWorktree && line.startsWith("branch refs/heads/")) {
+			branch = line.slice("branch refs/heads/".length);
+		}
+	}
+
+	if (matchingWorktree) return { ok: true, value: branch };
+
+	return { ok: true, value: undefined };
 }
 
 export async function createWorktree(pi: PiExec, repoRoot: string, branch: string, worktreeDir: string): Promise<Result<WorktreeCreateResult>> {
@@ -96,13 +110,22 @@ export async function createOrReuseWorktree(
 			return { ok: false, error: `Path already exists but is not a git worktree: ${worktreeDir}` };
 		}
 
-		const registeredWorktree = await isRegisteredWorktree(pi, repoRoot, worktreeDir);
-		if (!registeredWorktree.ok) return registeredWorktree;
-		if (registeredWorktree.value) {
-			return { ok: true, value: { reused: true } };
+		const registeredWorktreeBranch = await getRegisteredWorktreeBranch(pi, repoRoot, worktreeDir);
+		if (!registeredWorktreeBranch.ok) return registeredWorktreeBranch;
+		if (registeredWorktreeBranch.value === undefined) {
+			return { ok: false, error: `Path already exists but is not a git worktree for this repository: ${worktreeDir}` };
+		}
+		if (registeredWorktreeBranch.value === null) {
+			return { ok: false, error: `Path already exists as a git worktree without branch ${branch}: ${worktreeDir}` };
+		}
+		if (registeredWorktreeBranch.value !== branch) {
+			return {
+				ok: false,
+				error: `Path already exists as a git worktree for branch ${registeredWorktreeBranch.value}, not requested branch ${branch}: ${worktreeDir}`,
+			};
 		}
 
-		return { ok: false, error: `Path already exists but is not a git worktree for this repository: ${worktreeDir}` };
+		return { ok: true, value: { reused: true } };
 	}
 
 	return createWorktree(pi, repoRoot, branch, worktreeDir);

@@ -88,6 +88,37 @@ describe("git helpers", () => {
 		);
 	});
 
+	it("rejects an existing worktree path checked out for a different branch", async () => {
+		const worktreeDir = resolve("/repo/.worktrees/feature-foo");
+		const { pi } = fakePiExec((call) => {
+			if (call.args[0] === "rev-parse") return result({ stdout: `${worktreeDir}\n` });
+			if (call.args[0] === "worktree" && call.args[1] === "list") return result({ stdout: `worktree ${worktreeDir}\nHEAD abc123\nbranch refs/heads/feature/foo\n` });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
+
+		assert.deepEqual(
+			await createOrReuseWorktree(pi, "/repo", "feature-foo", worktreeDir, { pathExists: () => true }),
+			{
+				ok: false,
+				error: `Path already exists as a git worktree for branch feature/foo, not requested branch feature-foo: ${worktreeDir}`,
+			},
+		);
+	});
+
+	it("rejects an existing registered worktree path without a branch", async () => {
+		const worktreeDir = resolve("/repo/.worktrees/feature-foo");
+		const { pi } = fakePiExec((call) => {
+			if (call.args[0] === "rev-parse") return result({ stdout: `${worktreeDir}\n` });
+			if (call.args[0] === "worktree" && call.args[1] === "list") return result({ stdout: `worktree ${worktreeDir}\nHEAD abc123\n` });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
+
+		assert.deepEqual(
+			await createOrReuseWorktree(pi, "/repo", "feature-foo", worktreeDir, { pathExists: () => true }),
+			{ ok: false, error: `Path already exists as a git worktree without branch feature-foo: ${worktreeDir}` },
+		);
+	});
+
 	it("rejects an existing unrelated git repository rooted at the worktree path", async () => {
 		const worktreeDir = resolve("/repo/.worktrees/Feature-Auth");
 		const { pi } = fakePiExec((call) => {
