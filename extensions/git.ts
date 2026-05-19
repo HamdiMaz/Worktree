@@ -33,9 +33,17 @@ export async function getRepoRoot(pi: PiExec, cwd: string): Promise<Result<strin
 	return { ok: true, value: repoRoot };
 }
 
-export async function branchExists(pi: PiExec, repoRoot: string, branch: string): Promise<boolean> {
+async function checkBranchExists(pi: PiExec, repoRoot: string, branch: string): Promise<Result<boolean>> {
 	const result = await pi.exec("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], { cwd: repoRoot });
-	return result.code === 0;
+	if (result.code === 0) return { ok: true, value: true };
+	if (result.code === 1) return { ok: true, value: false };
+
+	return { ok: false, error: commandError(result, "Failed to check branch") };
+}
+
+export async function branchExists(pi: PiExec, repoRoot: string, branch: string): Promise<boolean> {
+	const result = await checkBranchExists(pi, repoRoot, branch);
+	return result.ok && result.value;
 }
 
 export async function isGitWorktree(pi: PiExec, worktreeDir: string): Promise<boolean> {
@@ -43,9 +51,26 @@ export async function isGitWorktree(pi: PiExec, worktreeDir: string): Promise<bo
 	return result.code === 0 && resolve(result.stdout.trim()) === resolve(worktreeDir);
 }
 
+async function isRegisteredWorktree(pi: PiExec, repoRoot: string, worktreeDir: string): Promise<Result<boolean>> {
+	const result = await pi.exec("git", ["worktree", "list", "--porcelain"], { cwd: repoRoot });
+	if (result.code !== 0) {
+		return { ok: false, error: commandError(result, "Failed to list worktrees") };
+	}
+
+	const resolvedWorktreeDir = resolve(worktreeDir);
+	const registered = result.stdout
+		.split("\n")
+		.filter((line) => line.startsWith("worktree "))
+		.some((line) => resolve(line.slice("worktree ".length)) === resolvedWorktreeDir);
+
+	return { ok: true, value: registered };
+}
+
 export async function createWorktree(pi: PiExec, repoRoot: string, branch: string, worktreeDir: string): Promise<Result<WorktreeCreateResult>> {
-	const existingBranch = await branchExists(pi, repoRoot, branch);
-	const args = existingBranch
+	const existingBranch = await checkBranchExists(pi, repoRoot, branch);
+	if (!existingBranch.ok) return existingBranch;
+
+	const args = existingBranch.value
 		? ["worktree", "add", worktreeDir, branch]
 		: ["worktree", "add", "-b", branch, worktreeDir];
 
@@ -67,11 +92,17 @@ export async function createOrReuseWorktree(
 	const pathExists = options.pathExists ?? existsSync;
 
 	if (pathExists(worktreeDir)) {
-		if (await isGitWorktree(pi, worktreeDir)) {
+		if (!(await isGitWorktree(pi, worktreeDir))) {
+			return { ok: false, error: `Path already exists but is not a git worktree: ${worktreeDir}` };
+		}
+
+		const registeredWorktree = await isRegisteredWorktree(pi, repoRoot, worktreeDir);
+		if (!registeredWorktree.ok) return registeredWorktree;
+		if (registeredWorktree.value) {
 			return { ok: true, value: { reused: true } };
 		}
 
-		return { ok: false, error: `Path already exists but is not a git worktree: ${worktreeDir}` };
+		return { ok: false, error: `Path already exists but is not a git worktree for this repository: ${worktreeDir}` };
 	}
 
 	return createWorktree(pi, repoRoot, branch, worktreeDir);

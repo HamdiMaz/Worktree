@@ -76,11 +76,29 @@ describe("git helpers", () => {
 
 	it("reuses an existing worktree path", async () => {
 		const worktreeDir = resolve("/repo/.worktrees/Feature-Auth");
-		const { pi } = fakePiExec(() => result({ stdout: `${worktreeDir}\n` }));
+		const { pi } = fakePiExec((call) => {
+			if (call.args[0] === "rev-parse") return result({ stdout: `${worktreeDir}\n` });
+			if (call.args[0] === "worktree" && call.args[1] === "list") return result({ stdout: `worktree ${worktreeDir}\nHEAD abc123\nbranch refs/heads/Feature/Auth\n` });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
 
 		assert.deepEqual(
 			await createOrReuseWorktree(pi, "/repo", "Feature/Auth", worktreeDir, { pathExists: () => true }),
 			{ ok: true, value: { reused: true } },
+		);
+	});
+
+	it("rejects an existing unrelated git repository rooted at the worktree path", async () => {
+		const worktreeDir = resolve("/repo/.worktrees/Feature-Auth");
+		const { pi } = fakePiExec((call) => {
+			if (call.args[0] === "rev-parse") return result({ stdout: `${worktreeDir}\n` });
+			if (call.args[0] === "worktree" && call.args[1] === "list") return result({ stdout: "worktree /repo\nHEAD abc123\nbranch refs/heads/main\n" });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
+
+		assert.deepEqual(
+			await createOrReuseWorktree(pi, "/repo", "Feature/Auth", worktreeDir, { pathExists: () => true }),
+			{ ok: false, error: `Path already exists but is not a git worktree for this repository: ${worktreeDir}` },
 		);
 	});
 
@@ -108,6 +126,19 @@ describe("git helpers", () => {
 			value: { reused: false },
 		});
 		assert.deepEqual(calls[1]?.args, ["worktree", "add", "-b", "feature/foo", "/repo/.worktrees/feature-foo"]);
+	});
+
+	it("returns a branch lookup error without running worktree add", async () => {
+		const { pi, calls } = fakePiExec((call) => {
+			if (call.args[0] === "show-ref") return result({ code: 128, stderr: "fatal: bad repo\n" });
+			throw new Error(`Unexpected command: ${call.command} ${call.args.join(" ")}`);
+		});
+
+		assert.deepEqual(await createOrReuseWorktree(pi, "/repo", "feature/foo", "/repo/.worktrees/feature-foo", { pathExists: () => false }), {
+			ok: false,
+			error: "fatal: bad repo",
+		});
+		assert.equal(calls.some((call) => call.args[0] === "worktree" && call.args[1] === "add"), false);
 	});
 
 	it("surfaces git stderr when worktree creation fails", async () => {
