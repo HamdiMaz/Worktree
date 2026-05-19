@@ -1,76 +1,96 @@
-# Worktree
+# Pi Worktree
 
-A Pi package extension for simplifying Git worktree workflows.
+A small Pi extension that makes Git worktrees easy to open from inside Pi.
 
-## Status
+If you already use worktrees, this removes the setup ceremony: no manual folder creation, no separate `git worktree add`, no reopening Pi in another directory.
 
-This package provides a `/worktree <name>` Pi slash command.
+## The shortcut
 
-The command creates or reuses a Git worktree at:
-
-```txt
-<repoRoot>/.worktrees/<sanitized-name>
-```
-
-The raw `<name>` is used as the Git branch name. The filesystem directory name is sanitized, so `Feature/Auth` becomes `Feature-Auth`.
-
-## Install for local development
-
-```bash
-npm install
-npm run check
-```
-
-## Use with Pi during development
-
-From this repository:
-
-```bash
-pi -e .
-```
-
-Pi loads the package through the manifest in `package.json`:
-
-```json
-{
-  "pi": {
-    "extensions": ["./extensions/index.ts"]
-  }
-}
-```
-
-## Usage
-
-Inside a Git repository, run:
+Inside any Git repository, run:
 
 ```txt
 /worktree Feature/Auth
 ```
 
-The command will:
+Pi Worktree creates or reuses the matching worktree and switches Pi into it.
 
-- create `<repoRoot>/.worktrees` when missing
-- append `.worktrees` to `.gitignore` when `.gitignore` exists and does not already include it
-- create or reuse `<repoRoot>/.worktrees/Feature-Auth`
-- create or use branch `Feature/Auth`
-- switch Pi into a fresh session rooted at the worktree
+## What it handles for you
 
-The command works from both persisted and brand-new Pi sessions. When the current session is already persisted, the worktree session keeps parent-session lineage. When it is not persisted yet, the command creates a fresh persisted worktree session directly.
+The command takes care of the repetitive setup:
 
-The command does not trigger an agent response. Hidden context tells the agent which worktree and branch it is in on the next user message.
+- creates `.worktrees/` when needed
+- creates or reuses the Git branch
+- creates or reuses the matching worktree
+- adds `.worktrees` to an existing `.gitignore` when needed
+- opens a fresh Pi session rooted in the worktree
+- works from both brand-new and already-persisted Pi sessions
 
-## Project layout
+You stay inside Pi. The extension handles the ceremony.
 
-```text
-extensions/index.ts      Pi extension entry point
-extensions/README.md     Extension-specific notes
-tests/                   Node test runner tests
+## Usage
+
+Run the command with the branch name you want:
+
+```txt
+/worktree my-feature
 ```
 
-## Release checks
+Pi will move you into:
 
-Run before publishing:
+```txt
+.worktrees/my-feature
+```
+
+From there, just keep prompting or coding as usual. The command switches sessions without automatically triggering an agent response.
+
+## Naming
+
+The name you pass is used as the Git branch name.
+
+If the name contains path separators, the folder name is cleaned up:
+
+```txt
+/worktree Feature/Auth
+```
+
+Branch:
+
+```txt
+Feature/Auth
+```
+
+Folder:
+
+```txt
+.worktrees/Feature-Auth
+```
+
+## Installation
+
+Install the package with Pi:
 
 ```bash
-npm run check
+pi install npm:@mazli/pi-worktree
 ```
+
+Or try it for a single Pi run without installing it permanently:
+
+```bash
+pi -e npm:@mazli/pi-worktree
+```
+
+## Development
+
+From this repository:
+
+```bash
+npm install
+npm run check
+pi -e .
+```
+
+The package entry point is declared in `package.json` and loads the extension from `extensions/`.
+
+## License
+
+MIT
