@@ -3,17 +3,17 @@ import { describe, it } from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import setupExtension from "../extensions/index.ts";
 
-describe("worktree extension scaffold", () => {
-	it("exports a loadable Pi extension factory without registering runtime resources yet", () => {
+describe("worktree extension registration", () => {
+	it("registers the /worktree command without tools or events", () => {
 		const registeredTools: unknown[] = [];
-		const registeredCommands: string[] = [];
+		const registeredCommands: Array<{ name: string; description?: string }> = [];
 		const registeredEvents: string[] = [];
 		const pi = {
 			registerTool(tool: unknown) {
 				registeredTools.push(tool);
 			},
-			registerCommand(name: string) {
-				registeredCommands.push(name);
+			registerCommand(name: string, options: { description?: string }) {
+				registeredCommands.push({ name, description: options.description });
 			},
 			on(event: string) {
 				registeredEvents.push(event);
@@ -23,7 +23,12 @@ describe("worktree extension scaffold", () => {
 		assert.equal(typeof setupExtension, "function");
 		assert.doesNotThrow(() => setupExtension(pi as unknown as ExtensionAPI));
 		assert.deepEqual(registeredTools, []);
-		assert.deepEqual(registeredCommands, []);
 		assert.deepEqual(registeredEvents, []);
+		assert.deepEqual(registeredCommands, [
+			{
+				name: "worktree",
+				description: "Create or reuse a Git worktree and switch Pi into it",
+			},
+		]);
 	});
 });
