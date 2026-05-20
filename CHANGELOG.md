@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v0.1.1
+
+- Added best-effort copying of safe project `.pi` resources into new worktrees when the target worktree lacks `.pi`.
+
 ## v0.1.0
 
 - Added the `/worktree <name>` Pi slash command to create or reuse Git worktrees under `.worktrees/` and switch into a worktree-bound session without automatically triggering the agent.

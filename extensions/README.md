@@ -13,6 +13,7 @@ The command:
 - creates worktrees under `<repoRoot>/.worktrees/`
 - creates `.worktrees` when missing
 - appends `.worktrees` to an existing `.gitignore` when missing
+- copies safe root `.pi` resources into the worktree when the target lacks `.pi`
 - switches Pi into a fresh worktree-bound session
 - adds hidden worktree context without sending a user message
 
@@ -26,5 +27,6 @@ worktree-command.ts   Command orchestration
 paths.ts              Path and directory helpers
 gitignore.ts          .gitignore helper
 git.ts                Git command helpers
+pi-resources.ts       Project .pi resource copy helper
 session.ts            Pi session switching helper
 ```

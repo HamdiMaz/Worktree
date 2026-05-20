@@ -89,6 +89,7 @@ describe("worktree command orchestration", () => {
 		const { ctx, notifications } = fakeCtx("/repo/packages/app");
 		const ensuredDirectories: string[] = [];
 		const gitignoreRoots: string[] = [];
+		const copiedResources: Array<{ repoRoot: string; worktreeDir: string }> = [];
 		const switched: Array<{ branch: string; worktreeDir: string }> = [];
 
 		await handleWorktreeCommand(pi, "Feature/Auth", ctx, {
@@ -99,6 +100,9 @@ describe("worktree command orchestration", () => {
 				gitignoreRoots.push(repoRoot);
 			},
 			pathExists: () => false,
+			copyProjectPiResources: async (repoRoot, worktreeDir) => {
+				copiedResources.push({ repoRoot, worktreeDir });
+			},
 			switchToFreshWorktreeSession: async (_ctx, branch, worktreeDir) => {
 				switched.push({ branch, worktreeDir });
 			},
@@ -106,6 +110,7 @@ describe("worktree command orchestration", () => {
 
 		assert.deepEqual(ensuredDirectories, ["/repo/.worktrees"]);
 		assert.deepEqual(gitignoreRoots, ["/repo"]);
+		assert.deepEqual(copiedResources, [{ repoRoot: "/repo", worktreeDir: "/repo/.worktrees/Feature-Auth" }]);
 		assert.deepEqual(calls.map((call) => call.args), [
 			["rev-parse", "--show-toplevel"],
 			["check-ref-format", "--branch", "Feature/Auth"],
@@ -163,6 +168,32 @@ describe("worktree command orchestration", () => {
 		});
 
 		assert.deepEqual(notifications, [{ message: "fatal: invalid branch", type: "error" }]);
+	});
+
+	it("continues switching sessions when copying .pi resources fails", async () => {
+		const { pi } = fakePi((call) => {
+			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
+			if (call.args[0] === "show-ref") return execResult({ code: 0 });
+			return execResult({ code: 0 });
+		});
+		const { ctx, notifications } = fakeCtx();
+		const switched: Array<{ branch: string; worktreeDir: string }> = [];
+
+		await handleWorktreeCommand(pi, "feature/foo", ctx, {
+			ensureDirectory: async () => undefined,
+			ensureGitignoreIncludesWorktrees: async () => undefined,
+			pathExists: () => false,
+			copyProjectPiResources: async () => {
+				throw new Error("copy failed");
+			},
+			switchToFreshWorktreeSession: async (_ctx, branch, worktreeDir) => {
+				switched.push({ branch, worktreeDir });
+			},
+		});
+
+		assert.deepEqual(notifications, [{ message: "Could not copy .pi resources into worktree: copy failed", type: "warning" }]);
+		assert.deepEqual(switched, [{ branch: "feature/foo", worktreeDir: "/repo/.worktrees/feature-foo" }]);
 	});
 
 	it("surfaces session switch errors without triggering the agent", async () => {

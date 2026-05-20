@@ -22,6 +22,7 @@ The command takes care of the repetitive setup:
 - creates or reuses the Git branch
 - creates or reuses the matching worktree
 - adds `.worktrees` to an existing `.gitignore` when needed
+- copies safe project `.pi` resources into the worktree when the worktree lacks `.pi`
 - opens a fresh Pi session rooted in the worktree
 - works from both brand-new and already-persisted Pi sessions
 
@@ -42,6 +43,8 @@ Pi will move you into:
 ```
 
 From there, just keep prompting or coding as usual. The command switches sessions without automatically triggering an agent response.
+
+If your repository root has a `.pi/` directory and the worktree does not, Pi Worktree copies the safe project resources it finds (`settings.json`, `skills/`, `prompts/`, `extensions/`, `themes/`, `SYSTEM.md`, and `APPEND_SYSTEM.md`). Missing entries are skipped, symlinks are ignored, and copy failures only show a warning before the session switch continues.
 
 ## Naming
 

@@ -2,12 +2,14 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-c
 import { createOrReuseWorktree, getRepoRoot, validateBranchName } from "./git.ts";
 import { ensureGitignoreIncludesWorktrees } from "./gitignore.ts";
 import { ensureDirectory, getWorktreeDir, getWorktreesDir, sanitizeWorktreeName } from "./paths.ts";
+import { copyProjectPiResources } from "./pi-resources.ts";
 import { switchToFreshWorktreeSession } from "./session.ts";
 
 interface WorktreeCommandDependencies {
 	ensureDirectory?: (path: string) => Promise<void>;
 	ensureGitignoreIncludesWorktrees?: (repoRoot: string) => Promise<void>;
 	pathExists?: (path: string) => boolean;
+	copyProjectPiResources?: (repoRoot: string, worktreeDir: string) => Promise<void>;
 	switchToFreshWorktreeSession?: (ctx: ExtensionCommandContext, branch: string, worktreeDir: string) => Promise<void>;
 }
 
@@ -56,6 +58,7 @@ export async function handleWorktreeCommand(
 	const worktreeDir = getWorktreeDir(repoRoot, safeName);
 	const makeDirectory = dependencies.ensureDirectory ?? ensureDirectory;
 	const updateGitignore = dependencies.ensureGitignoreIncludesWorktrees ?? ensureGitignoreIncludesWorktrees;
+	const copyResources = dependencies.copyProjectPiResources ?? copyProjectPiResources;
 	const switchSession = dependencies.switchToFreshWorktreeSession ?? switchToFreshWorktreeSession;
 
 	try {
@@ -77,6 +80,12 @@ export async function handleWorktreeCommand(
 	if (!worktreeResult.ok) {
 		ctx.ui.notify(worktreeResult.error, "error");
 		return;
+	}
+
+	try {
+		await copyResources(repoRoot, worktreeDir);
+	} catch (error) {
+		ctx.ui.notify(`Could not copy .pi resources into worktree: ${errorMessage(error, "copy failed")}`, "warning");
 	}
 
 	try {
