@@ -9,10 +9,16 @@ If you already use worktrees, this removes the setup ceremony: no manual folder 
 Inside any Git repository, run:
 
 ```txt
-/worktree Feature/Auth
+/worktree
 ```
 
-Pi Worktree creates or reuses the matching worktree and switches Pi into it.
+Pi Worktree generates a short random name (5 lowercase letters and digits, e.g. `k3m9x`), creates or reuses a branch and worktree with that name, and switches Pi into it. No name required.
+
+Prefer to name it yourself? Pass one:
+
+```txt
+/worktree Feature/Auth
+```
 
 ## What it handles for you
 
@@ -30,7 +36,19 @@ You stay inside Pi. The extension handles the ceremony.
 
 ## Usage
 
-Run the command with the branch name you want:
+Run the command with no arguments to get a generated name:
+
+```txt
+/worktree
+```
+
+Pi will move you into something like:
+
+```txt
+.worktrees/k3m9x
+```
+
+Or pass a name to use it as the branch and folder name:
 
 ```txt
 /worktree my-feature
@@ -48,9 +66,11 @@ If your repository root has a `.pi/` directory and the worktree does not, Pi Wor
 
 ## Naming
 
-The name you pass is used as the Git branch name.
+The name is used as the Git branch name.
 
-If the name contains path separators, the folder name is cleaned up:
+When you omit the name, the extension generates a 5-character lowercase alphanumeric name and retries until it finds one that does not collide with an existing branch or worktree folder.
+
+If the name you pass contains path separators, the folder name is cleaned up:
 
 ```txt
 /worktree Feature/Auth

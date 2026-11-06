@@ -4,10 +4,12 @@ This directory contains the Pi extension entry point for `@mazli/pi-worktree`.
 
 ## Runtime behavior
 
-The extension registers `/worktree <name>`.
+The extension registers `/worktree [name]`.
 
 The command:
 
+- generates a 5-character lowercase alphanumeric name when `<name>` is omitted
+- retries generated names until one collides with neither an existing branch nor an existing worktree folder
 - uses `<name>` as the Git branch name
 - uses a sanitized `<name>` as the directory name
 - creates worktrees under `<repoRoot>/.worktrees/`

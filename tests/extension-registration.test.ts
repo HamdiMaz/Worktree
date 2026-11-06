@@ -27,7 +27,7 @@ describe("worktree extension registration", () => {
 		assert.deepEqual(registeredCommands, [
 			{
 				name: "worktree",
-				description: "Create or reuse a Git worktree and switch Pi into it",
+				description: "Create or reuse a Git worktree (random name when omitted) and switch Pi into it",
 			},
 		]);
 	});

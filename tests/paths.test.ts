@@ -3,7 +3,24 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { ensureDirectory, getWorktreeDir, getWorktreesDir, sanitizeWorktreeName } from "../extensions/paths.ts";
+import { ensureDirectory, generateWorktreeName, getWorktreeDir, getWorktreesDir, sanitizeWorktreeName } from "../extensions/paths.ts";
+
+describe("worktree name generation", () => {
+	it("generates 5-character lowercase alphanumeric names", () => {
+		for (let run = 0; run < 50; run += 1) {
+			assert.match(generateWorktreeName(), /^[a-z0-9]{5}$/);
+		}
+	});
+
+	it("honors a custom length", () => {
+		assert.match(generateWorktreeName(10), /^[a-z0-9]{10}$/);
+	});
+
+	it("generates names that are valid filesystem segments", () => {
+		const name = generateWorktreeName();
+		assert.equal(sanitizeWorktreeName(name), name);
+	});
+});
 
 describe("path helpers", () => {
 	it("sanitizes branch names for filesystem paths", () => {

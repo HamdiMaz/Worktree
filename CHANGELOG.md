@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+- `/worktree` now works without a name: it generates a random 5-character lowercase alphanumeric name and retries until the name is unused by both branches and worktree folders.
+
 ## v0.1.1
 
 - Added best-effort copying of safe project `.pi` resources into new worktrees when the target worktree lacks `.pi`.

@@ -49,20 +49,86 @@ function fakeCtx(cwd = "/repo") {
 }
 
 describe("worktree command orchestration", () => {
-	it("shows usage for a missing name", async () => {
-		const { pi } = fakePi(() => execResult({ code: 0 }));
+	it("generates a random name when no name is given", async () => {
+		const { pi, calls } = fakePi((call) => {
+			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
+			if (call.args[0] === "show-ref") return execResult({ code: 1 });
+			return execResult({ code: 0 });
+		});
 		const fake = fakeCtx();
 		const { ctx, notifications } = fake;
+		const switched: Array<{ branch: string; worktreeDir: string }> = [];
 
 		await handleWorktreeCommand(pi, "   ", ctx, {
 			ensureDirectory: async () => undefined,
 			ensureGitignoreIncludesWorktrees: async () => undefined,
 			pathExists: () => false,
-			switchToFreshWorktreeSession: async () => undefined,
+			generateName: () => "a1b2c",
+			switchToFreshWorktreeSession: async (_ctx, branch, worktreeDir) => {
+				switched.push({ branch, worktreeDir });
+			},
 		});
 
 		assert.equal(fake.waited, true);
-		assert.deepEqual(notifications, [{ message: "Usage: /worktree <name>", type: "error" }]);
+		assert.deepEqual(switched, [{ branch: "a1b2c", worktreeDir: "/repo/.worktrees/a1b2c" }]);
+		assert.deepEqual(calls.map((call) => call.args), [
+			["rev-parse", "--show-toplevel"],
+			["check-ref-format", "--branch", "a1b2c"],
+			["show-ref", "--verify", "--quiet", "refs/heads/a1b2c"],
+			["check-ref-format", "--branch", "a1b2c"],
+			["show-ref", "--verify", "--quiet", "refs/heads/a1b2c"],
+			["worktree", "add", "-b", "a1b2c", "/repo/.worktrees/a1b2c"],
+		]);
+		assert.deepEqual(notifications, []);
+	});
+
+	it("skips generated names that already exist", async () => {
+		const generated = ["aaaaa", "bbbbb"];
+		const usedExistingEntries = new Set(["refs/heads/aaaaa", "/repo/.worktrees/bbbbb"]);
+		const { pi } = fakePi((call) => {
+			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
+			if (call.args[0] === "show-ref") return execResult({ code: usedExistingEntries.has(call.args.at(-1) ?? "") ? 0 : 1 });
+			return execResult({ code: 0 });
+		});
+		const { ctx, notifications } = fakeCtx();
+		const switched: Array<{ branch: string; worktreeDir: string }> = [];
+
+		await handleWorktreeCommand(pi, "", ctx, {
+			ensureDirectory: async () => undefined,
+			ensureGitignoreIncludesWorktrees: async () => undefined,
+			pathExists: (path) => usedExistingEntries.has(path),
+			generateName: () => generated.shift() ?? "ccccc",
+			switchToFreshWorktreeSession: async (_ctx, branch, worktreeDir) => {
+				switched.push({ branch, worktreeDir });
+			},
+		});
+
+		assert.deepEqual(switched, [{ branch: "ccccc", worktreeDir: "/repo/.worktrees/ccccc" }]);
+		assert.deepEqual(notifications, []);
+	});
+
+	it("reports an error when no unused generated name can be found", async () => {
+		const { pi } = fakePi((call) => {
+			if (call.args[0] === "rev-parse") return execResult({ stdout: "/repo\n" });
+			if (call.args[0] === "check-ref-format") return execResult({ code: 0 });
+			if (call.args[0] === "show-ref") return execResult({ code: 0 });
+			return execResult({ code: 0 });
+		});
+		const { ctx, notifications } = fakeCtx();
+
+		await handleWorktreeCommand(pi, "", ctx, {
+			ensureDirectory: async () => undefined,
+			ensureGitignoreIncludesWorktrees: async () => undefined,
+			pathExists: () => false,
+			generateName: () => "aaaaa",
+			switchToFreshWorktreeSession: async () => undefined,
+		});
+
+		assert.deepEqual(notifications, [
+			{ message: "Could not generate an unused worktree name after 10 attempts", type: "error" },
+		]);
 	});
 
 	it("shows a user-facing error outside a git repo", async () => {
