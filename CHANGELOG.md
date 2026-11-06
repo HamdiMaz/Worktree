@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.2.0
 
 - `/worktree` now works without a name: it generates a random 5-character lowercase alphanumeric name and retries until the name is unused by both branches and worktree folders.
 
